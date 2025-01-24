@@ -6,7 +6,7 @@
   <title>Cali 420 Loot Parser</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    textarea { width: 100%; height: 300px; margin-bottom: 20px; }
+    textarea { width: 75%; height: 400px; margin-bottom: 20px; }
     ul { list-style-type: none; padding: 0; }
     li { 
       margin: 10px 0; 
@@ -43,14 +43,15 @@
 </head>
 <body>
   <h1>Cali 420 Loot Parser</h1>
-  <textarea id="logInput" placeholder="Paste your log here..."></textarea>
+  <textarea id="logInput" placeholder="Paste your loot log here..."></textarea>
+  <br>
   <button onclick="parseLog()">Parse Log Input</button>
   <button onclick="clearLogInput()">Clear Log Input</button>
 
   <h2>Events & Warnings</h2>
   <output id="lootersOutput" class="looters-output"></output>
   <div id="warningMessage" class="warning-message" style="display: none;">
-    Warning - Multiple looters detected, please review the input
+    Warning - Multiple looters detected, please review the input.
   </div>
 
   <h2>Parsed Item List</h2>
@@ -171,7 +172,7 @@
         const itemName = checkbox.dataset.item;
         const qtyInput = document.querySelector(`.item-qty[data-item="${itemName}"]`);
         const qty = qtyInput.value;
-        commands.push(`inventory.give ${itemName} ${qty}`);
+        commands.push(`inventory.giveid ${itemName} ${qty}`);
       });
 
       if (commands.length > 0) {
