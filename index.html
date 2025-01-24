@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cali 420 Loot Parser</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea { width: 100%; height: 300px; margin-bottom: 20px; }
+    ul { list-style-type: none; padding: 0; }
+    li { 
+      margin: 10px 0; 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      justify-content: flex-start; 
+    }
+    label { width: 200px; text-align: left; }
+    .item-qty { width: 40px; text-align: center; }
+    input[type="checkbox"] { margin-left: 0; }
+    .command-box {  
+      overflow-y: auto; 
+      white-space: pre-wrap; 
+      text-align: left;
+    }
+    .error-message {
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .looters-output {
+      white-space: pre-wrap;
+      overflow-y: auto;
+    }
+    .looter { color: red; }
+    .looted { color: green; }
+    .warning-message {
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Cali 420 Loot Parser</h1>
+  <textarea id="logInput" placeholder="Paste your log here..."></textarea>
+  <button onclick="parseLog()">Parse Log Input</button>
+  <button onclick="clearLogInput()">Clear Log Input</button>
+
+  <h2>Events & Warnings</h2>
+  <output id="lootersOutput" class="looters-output"></output>
+  <div id="warningMessage" class="warning-message" style="display: none;">
+    Warning - Multiple looters detected, please review the input
+  </div>
+
+  <h2>Parsed Item List</h2>
+  <ul id="itemList"></ul>
+  <button onclick="selectAllItems()">Select All Inventory Items</button>
+  <button onclick="clearSelections()">Clear All Inventory Items</button>
+  <button onclick="copyToClipboard()">Copy Command to Clipboard</button>
+  
+  <h2>Console Commands</h2>
+  <output id="commandOutput" class="command-box"></output>
+
+  <div id="errorMessage" class="error-message" style="display: none;">
+    Too many items selected. 30 is the maximum items that can be selected
+  </div>
+
+  <script>
+    function parseLog() {
+      const logInput = document.getElementById("logInput").value;
+      const itemRegex = /looted\s([\w._]+)\s\((\d+)\)/g;
+      const looterRegex = /\[(.*?)](.*?)\slooted.*from\s\[(.*?)\](\d+).*teleportpos\s\((.*?)\)/g;
+
+      // Match all items
+      const items = [...logInput.matchAll(itemRegex)];
+
+      // Match looters and looted players
+      const looters = [...logInput.matchAll(looterRegex)];
+
+      // Extract and count items
+      const itemCounts = {};
+      items.forEach(match => {
+        const itemName = match[1];
+        const quantity = parseInt(match[2]);
+        itemCounts[itemName] = (itemCounts[itemName] || 0) + quantity;
+      });
+
+      // Generate the list dynamically
+      const itemList = document.getElementById("itemList");
+      const commandOutput = document.getElementById("commandOutput");
+      const lootersOutput = document.getElementById("lootersOutput");
+      const warningMessage = document.getElementById("warningMessage");
+
+      itemList.innerHTML = ""; // Clear the previous list
+      commandOutput.innerHTML = ""; // Clear the previous commands
+      lootersOutput.innerHTML = ""; // Clear the previous looters output
+      warningMessage.style.display = "none"; // Hide the warning message
+
+      Object.entries(itemCounts).forEach(([item, qty]) => {
+        const listItem = document.createElement("li");
+        
+        listItem.innerHTML = `
+          <input type="checkbox" id="${item}" class="item-checkbox" data-item="${item}" data-qty="${qty}" />
+          <label for="${item}">${item}</label>
+          <input 
+            type="number" 
+            class="item-qty" 
+            value="${qty}" 
+            min="1" 
+            maxlength="4" 
+            data-item="${item}" 
+          />
+        `;
+        itemList.appendChild(listItem);
+      });
+
+      const seenKeys = new Set();
+
+      looters.forEach(match => {
+        const looterNames = match[1].split(", ").map(name => name.trim());
+        const looterIds = match[2].split(", ").map(id => id.trim());
+        const lootedName = match[3];
+        const lootedId = match[4];
+        const coordinates = match[5];
+
+        const looterEntries = looterNames.map((looterName, index) => {
+          const looterId = looterIds[index];
+          return `<span class="looter">${looterName} (<a href='https://steamcommunity.com/profiles/${looterId}' target='_blank'>${looterId}</a>)</span>`;
+        }).join(" and ");
+
+        const lootedEntry = `<span class="looted">${lootedName} (<a href='https://steamcommunity.com/profiles/${lootedId}' target='_blank'>${lootedId}</a>)</span>`;
+
+        const key = `${looterEntries} looted ${lootedEntry} at (${coordinates})`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          lootersOutput.innerHTML += `${key}<br>`;
+        }
+      });
+
+      // Display warning message if multiple looters are detected
+      if (looters.length > 1) {
+        warningMessage.style.display = "block";
+      }
+
+      // Add event listeners for checkboxes and quantity fields
+      document.querySelectorAll(".item-checkbox").forEach(checkbox => {
+        checkbox.addEventListener("change", updateCommands);
+      });
+      document.querySelectorAll(".item-qty").forEach(input => {
+        input.addEventListener("input", updateCommands);
+      });
+    }
+
+    function updateCommands() {
+      const checkboxes = document.querySelectorAll(".item-checkbox:checked");
+      const commandOutput = document.getElementById("commandOutput");
+      const errorMessage = document.getElementById("errorMessage");
+      commandOutput.innerHTML = ""; // Clear previous commands
+
+      if (checkboxes.length > 30) {
+        errorMessage.style.display = "block";
+        return;
+      } else {
+        errorMessage.style.display = "none";
+      }
+
+      // Build the command string dynamically
+      let commands = [];
+      checkboxes.forEach(checkbox => {
+        const itemName = checkbox.dataset.item;
+        const qtyInput = document.querySelector(`.item-qty[data-item="${itemName}"]`);
+        const qty = qtyInput.value;
+        commands.push(`inventory.give ${itemName} ${qty}`);
+      });
+
+      if (commands.length > 0) {
+        // Combine commands on a single line with ";"
+        commandOutput.innerHTML = `bind F2 ${commands.join("; ")}`;
+      }
+    }
+
+    function selectAllItems() {
+      const checkboxes = document.querySelectorAll(".item-checkbox");
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+      });
+      updateCommands();
+    }
+
+    function clearSelections() {
+      const checkboxes = document.querySelectorAll(".item-checkbox");
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
+      const commandOutput = document.getElementById("commandOutput");
+      commandOutput.innerHTML = ""; // Clear the command output
+      const errorMessage = document.getElementById("errorMessage");
+      errorMessage.style.display = "none";
+    }
+
+    function copyToClipboard() {
+      const commandOutput = document.getElementById("commandOutput");
+      const text = commandOutput.innerText;
+      if (text.trim() !== "") {
+        navigator.clipboard.writeText(text).then(() => {
+          alert("Commands copied to clipboard!");
+        }).catch(err => {
+          alert("Failed to copy commands to clipboard.");
+        });
+      } else {
+        alert("No commands to copy.");
+      }
+    }
+
+    function clearLogInput() {
+      document.getElementById("logInput").value = "";
+    }
+  </script>
+</body>
+</html>
