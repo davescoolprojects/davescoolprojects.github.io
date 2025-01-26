@@ -1,0 +1,320 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loot Log Parser</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea { width: 70%; height: 400px; margin-bottom: 20px; }
+    ul { list-style-type: none; padding: 0; }
+    li {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+    label { width: 500px; text-align: left; }
+    .item-qty { width: 80px; text-align: center; }
+    input[type="checkbox"] { margin-left: 0; }
+    .command-box {
+      overflow-y: auto;
+      white-space: pre-wrap;
+      text-align: left;   
+    }
+    .error-message {
+      color: red;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .summary-box {
+		width: 70%;
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+    .summary-box a {
+		width: 70%;
+      color: blue;
+      text-decoration: none;
+    }
+    .summary-box a:hover {
+      text-decoration: underline;
+    }
+	 .looter {
+      color: red;
+      font-weight: bold;
+    }
+    .looted-player {
+      color: green;
+      font-weight: bold;
+    }
+	.command-warning {
+		width: 70%;
+   background-color: #e7f3fe;
+  border-left: 6px solid #2196F3;
+  padding:1px;
+}
+  </style>
+</head>
+<body>
+  <h1>Loot Log Parser</h1>
+  <textarea id="logInput" placeholder="Paste loot log here..."></textarea>
+  <br>
+  <button onclick="parseLog()">Parse Log Input</button>
+  <button onclick="clearLogInput()">Clear Log Input</button>
+
+  <h2>Summary of Events</h2>
+  <div id="summaryBox" class="summary-box">No data parsed yet.</div>
+
+  <h2>Parsed Item List</h2>
+  <h3>Looted Items</h3>
+  <ul id="lootedItemList"></ul>
+  <h3>Dropped Items</h3>
+  <ul id="droppedItemList"></ul>
+  <h3>Gave Items</h3>
+  <ul id="gaveItemList"></ul>
+  <button onclick="selectAllItems()">Select All Inventory Items</button>
+  <button onclick="clearSelections()">Clear All Inventory Items</button>
+  <h2>Console Command</h2>
+  <div class="command-warning"><p> Please make sure you have sufficient space in your inventory!   <button onclick="copyToClipboard()">Copy Bind Command to Clipboard</button></p></div>
+  <br>
+  <output id="commandOutput" class="command-box"></output>
+
+  <div id="errorMessage" class="error-message" style="display: none;">
+    Too many items selected. Maximum number of items that can be selected is 30.
+  </div>
+
+  <script>
+    // Define parseLog in the global scope
+    function parseLog() {
+      const logInput = document.getElementById("logInput").value;
+      const lootedRegex = /\[(.*?)\](.*?)\slooted\s([\w._]+)\s\((\d+)\)\s\(([^)]+)\)/g;
+      const droppedRegex = /\[(.*?)\](.*?)\sdropped\s([\w._]+)\s\((\d+)\)\s\(([^)]+)\)/g;
+      const gaveRegex = /\[(.*?)\](.*?)\sgave\s([\w._]+)\s\((\d+)\)\s\(([^)]+)\)/g;
+      //const lastPlayerRegex = /.*\[(.*?)\](\d+)$/; 
+	  const lootedPlayerRegex = /(?:from|to)\s\[(.+?)\](\d+)/; // Updated regex to capture looted player
+	  
+      const lootedItems = [...logInput.matchAll(lootedRegex)];
+      const droppedItems = [...logInput.matchAll(droppedRegex)];
+      const gaveItems = [...logInput.matchAll(gaveRegex)];
+
+      const uniqueEvents = new Set();
+
+lootedItems.forEach(match => {
+  const looters = match[1].split(", ").map((name, index) => {
+    const playerId = match[2].split(", ")[index];
+    return `<span class='looter'>${name.trim()}</span> (<a href="https://steamcommunity.com/profiles/${playerId}" target="_blank">${playerId}</a>)`;
+  }).join(" and ");
+
+  const lootedPlayerRegex = /(?:from|to)\s\[(.+?)\](\d+)/; // Regex to capture the looted player
+  const lootedMatch = match.input.match(lootedPlayerRegex); // Match the looted player
+  const lootedPlayer = lootedMatch ? `<span class='looted-player'>${lootedMatch[1]}</span> (<a href="https://steamcommunity.com/profiles/${lootedMatch[2]}" target="_blank">${lootedMatch[2]}</a>)` : "Unknown";
+
+  uniqueEvents.add(`${looters} looted items from ${lootedPlayer}`);
+});
+
+    droppedItems.forEach(match => {
+  const looters = match[1].split(", ").map((name, index) => {
+    const playerId = match[2].split(", ")[index];
+    return `<span class='looter'>${name.trim()}</span> (<a href="https://steamcommunity.com/profiles/${playerId}" target="_blank">${playerId}</a>)`;
+  }).join(" and ");
+
+  const lootedPlayerRegex = /(?:from|to)\s\[(.+?)\](\d+)/; // Regex to capture the looted player
+  const lootedMatch = match.input.match(lootedPlayerRegex); // Match the looted player
+  const lootedPlayer = lootedMatch ? `<span class='looted-player'>${lootedMatch[1]}</span> (<a href="https://steamcommunity.com/profiles/${lootedMatch[2]}" target="_blank">${lootedMatch[2]}</a>)` : "Unknown";
+
+  uniqueEvents.add(`${looters} dropped items while looting ${lootedPlayer}`);
+});
+
+
+gaveItems.forEach(match => {
+  const looters = match[1].split(", ").map((name, index) => {
+    const playerId = match[2].split(", ")[index];
+    return `<span class='looter'>${name.trim()}</span> (<a href="https://steamcommunity.com/profiles/${playerId}" target="_blank">${playerId}</a>)`;
+  }).join(" and ");
+
+  const recipientRegex = /(?:from|to)\s\[(.+?)\](\d+)/; // Regex to capture the recipient player
+  const recipientMatch = match.input.match(recipientRegex); // Match the recipient player
+  const recipientPlayer = recipientMatch ? `<span class='looted-player'>${recipientMatch[1]}</span> (<a href="https://steamcommunity.com/profiles/${recipientMatch[2]}" target="_blank">${recipientMatch[2]}</a>)` : "Unknown";
+
+  uniqueEvents.add(`${looters} gave items to ${recipientPlayer}`);
+});
+
+
+      const summaryBox = document.getElementById("summaryBox");
+      if (uniqueEvents.size > 0) {
+        summaryBox.innerHTML = Array.from(uniqueEvents).join('<br>');
+      } else {
+        summaryBox.innerHTML = "No unique events found.";
+      }
+
+      const lootedItemCounts = {};
+      const droppedItemCounts = {};
+      const gaveItemCounts = {};
+
+      lootedItems.forEach(match => {
+        const itemName = match[3];
+        const quantity = parseInt(match[4]);
+        const simpleName = match[5];
+        lootedItemCounts[itemName] = {
+          qty: (lootedItemCounts[itemName]?.qty || 0) + quantity,
+          simpleName: simpleName,
+        };
+      });
+
+      droppedItems.forEach(match => {
+        const itemName = match[3];
+        const quantity = parseInt(match[4]);
+        const simpleName = match[5];
+        droppedItemCounts[itemName] = {
+          qty: (droppedItemCounts[itemName]?.qty || 0) + quantity,
+          simpleName: simpleName,
+        };
+      });
+
+      gaveItems.forEach(match => {
+        const itemName = match[3];
+        const quantity = parseInt(match[4]);
+        const simpleName = match[5];
+        gaveItemCounts[itemName] = {
+          qty: (gaveItemCounts[itemName]?.qty || 0) + quantity,
+          simpleName: simpleName,
+        };
+      });
+
+      const lootedItemList = document.getElementById("lootedItemList");
+      const droppedItemList = document.getElementById("droppedItemList");
+      const gaveItemList = document.getElementById("gaveItemList");
+      const commandOutput = document.getElementById("commandOutput");
+
+      lootedItemList.innerHTML = "";
+      droppedItemList.innerHTML = "";
+      gaveItemList.innerHTML = "";
+      commandOutput.innerHTML = "";
+
+      Object.entries(lootedItemCounts).forEach(([item, { qty, simpleName }]) => {
+        const listItem = document.createElement("li");
+        listItem.innerHTML = `
+          <input type="checkbox" id="${simpleName}" class="item-checkbox" data-item="${simpleName}" data-qty="${qty}" checked />
+          <label for="${simpleName}">${item} (${simpleName})</label>
+          <input 
+            type="number" 
+            class="item-qty" 
+            value="${qty}" 
+            min="1" 
+            maxlength="6" 
+            data-item="${simpleName}" 
+          />
+        `;
+        lootedItemList.appendChild(listItem);
+      });
+
+      Object.entries(droppedItemCounts).forEach(([item, { qty, simpleName }]) => {
+        const listItem = document.createElement("li");
+        listItem.innerHTML = `
+          <input type="checkbox" id="${simpleName}" class="item-checkbox" data-item="${simpleName}" data-qty="${qty}" checked />
+          <label for="${simpleName}">${item} (${simpleName})</label>
+          <input 
+            type="number" 
+            class="item-qty" 
+            value="${qty}" 
+            min="1" 
+            maxlength="6" 
+            data-item="${simpleName}" 
+          />
+        `;
+        droppedItemList.appendChild(listItem);
+      });
+
+      Object.entries(gaveItemCounts).forEach(([item, { qty, simpleName }]) => {
+        const listItem = document.createElement("li");
+        listItem.innerHTML = `
+          <input type="checkbox" id="${simpleName}" class="item-checkbox" data-item="${simpleName}" data-qty="${qty}" checked />
+          <label for="${simpleName}">${item} (${simpleName})</label>
+          <input 
+            type="number" 
+            class="item-qty" 
+            value="${qty}" 
+            min="1" 
+            maxlength="6" 
+            data-item="${simpleName}" 
+          />
+        `;
+        gaveItemList.appendChild(listItem);
+      });
+
+      document.querySelectorAll(".item-checkbox").forEach(checkbox => {
+        checkbox.addEventListener("change", updateCommands);
+      });
+      document.querySelectorAll(".item-qty").forEach(input => {
+        input.addEventListener("input", updateCommands);
+      });
+
+      updateCommands();
+    }
+
+    function updateCommands() {
+      const checkboxes = document.querySelectorAll(".item-checkbox:checked");
+      const commandOutput = document.getElementById("commandOutput");
+      const errorMessage = document.getElementById("errorMessage");
+      commandOutput.innerHTML = "";
+
+      if (checkboxes.length > 30) {
+        errorMessage.style.display = "block";
+        return;
+      } else {
+        errorMessage.style.display = "none";
+      }
+
+      let commands = [];
+      checkboxes.forEach(checkbox => {
+        const simpleName = checkbox.dataset.item;
+        const qtyInput = document.querySelector(`.item-qty[data-item="${simpleName}"]`);
+        const qty = qtyInput.value;
+        commands.push(`inventory.give ${simpleName} ${qty}`);
+      });
+
+      if (commands.length > 0) {
+        commandOutput.innerHTML = `bind F2 ${commands.join("; ")}`;
+      }
+    }
+
+    function selectAllItems() {
+      const checkboxes = document.querySelectorAll(".item-checkbox");
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+      });
+      updateCommands();
+    }
+
+    function clearSelections() {
+      const checkboxes = document.querySelectorAll(".item-checkbox");
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
+      const commandOutput = document.getElementById("commandOutput");
+      commandOutput.innerHTML = "";
+      const errorMessage = document.getElementById("errorMessage");
+      errorMessage.style.display = "none";
+    }
+
+    function copyToClipboard() {
+      const commandOutput = document.getElementById("commandOutput");
+      const text = commandOutput.innerText;
+      if (text.trim() !== "") {
+        navigator.clipboard.writeText(text).catch(err => {
+          console.error("Failed to copy commands to clipboard.", err);
+        });
+      }
+    }
+
+    function clearLogInput() {
+      document.getElementById("logInput").value = "";
+    }
+  </script>
+</body>
+</html>
